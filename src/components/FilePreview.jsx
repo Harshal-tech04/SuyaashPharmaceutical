@@ -1,17 +1,9 @@
 import { useState } from "react";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Image as ImageIcon, X } from "lucide-react";
-import { TextExtractor } from "./TextExtractor";
+import { FileText, Image as ImageIcon } from "lucide-react";
 
-export function FilePreview({ file, onExtracted }) {
-  const [extractedText, setExtractedText] = useState("");
-
-  const handleExtracted = (text) => {
-    setExtractedText(text);
-    onExtracted?.(file.name, text);
-  };
-
+export function FilePreview({ file }) {
   return (
     <div className="h-full flex flex-col">
       {/* Preview Header */}
@@ -20,9 +12,6 @@ export function FilePreview({ file, onExtracted }) {
           <ImageIcon className="w-5 h-5 text-gray-500" />
           <span className="font-medium text-gray-900">{file.name}</span>
         </div>
-        {file.type === "image" && (
-          <TextExtractor file={file.file} onExtracted={handleExtracted} />
-        )}
       </div>
 
       {/* Preview Content */}
@@ -55,26 +44,6 @@ export function FilePreview({ file, onExtracted }) {
           )}
         </AnimatePresence>
       </div>
-
-      {/* Extracted Text */}
-      {extractedText && (
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-gray-900">
-              Extracted Text
-            </h3>
-            <button
-              onClick={() => setExtractedText("")}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="text-sm text-gray-600 whitespace-pre-wrap">
-            {extractedText}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

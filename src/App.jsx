@@ -63,7 +63,7 @@ function FileUploadForm({ onFileUpload }) {
           >
             <Upload className="w-6 h-6 text-blue-600" />
             <h2 className="text-2xl font-semibold text-gray-800">
-              Upload Files
+              Add Files
             </h2>
           </motion.div>
 
@@ -87,7 +87,7 @@ function FileUploadForm({ onFileUpload }) {
               <FileImage className="w-12 h-12 text-blue-600" />
               <div className="text-gray-600">
                 <span className="font-semibold text-blue-600">
-                  Click to upload
+                  Click to add
                 </span>{" "}
                 or drag and drop
               </div>

@@ -9,12 +9,96 @@ import { TextExtractionPanel } from "./TextExtractionPanel";
 export function FileUploadLayout({ files, onRemove, onFileUpload }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [extractedText, setExtractedText] = useState({});
+  const [isExtracting, setIsExtracting] = useState({});
+  const [extractionErrors, setExtractionErrors] = useState({});
 
   const handleExtracted = (fileName, text) => {
     setExtractedText((prev) => ({
       ...prev,
       [fileName]: text,
     }));
+    setIsExtracting((prev) => ({
+      ...prev,
+      [fileName]: false,
+    }));
+  };
+
+  const handleExtractionError = (fileName, error) => {
+    setExtractionErrors((prev) => ({
+      ...prev,
+      [fileName]: error,
+    }));
+    setIsExtracting((prev) => ({
+      ...prev,
+      [fileName]: false,
+    }));
+  };
+
+  const handleExtractText = (file) => {
+    if (file.type !== "image" || !file.file) return;
+    
+    // If we already have extracted text, don't extract again
+    if (extractedText[file.name]) return;
+    
+    setIsExtracting((prev) => ({
+      ...prev,
+      [file.name]: true,
+    }));
+    
+    // Extract text directly instead of using the component as a constructor
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        const base64Image = e.target.result.split(",")[1];
+        const response = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${
+            import.meta.env.VITE_GOOGLE_CLOUD_API_KEY
+          }`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              requests: [
+                {
+                  image: {
+                    content: base64Image,
+                  },
+                  features: [
+                    {
+                      type: "TEXT_DETECTION",
+                      maxResults: 1,
+                    },
+                  ],
+                },
+              ],
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error?.message ||
+              `HTTP error! status: ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        const text = data.responses[0]?.fullTextAnnotation?.text || "No text found";
+        handleExtracted(file.name, text);
+      } catch (err) {
+        handleExtractionError(file.name, err.message);
+      }
+    };
+
+    reader.onerror = () => {
+      handleExtractionError(file.name, "Error reading file");
+    };
+
+    reader.readAsDataURL(file.file);
   };
 
   return (
@@ -35,7 +119,7 @@ export function FileUploadLayout({ files, onRemove, onFileUpload }) {
               className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
             >
               <Upload className="w-4 h-4" />
-              Upload
+              Add
             </label>
             <input
               type="file"
@@ -67,7 +151,7 @@ export function FileUploadLayout({ files, onRemove, onFileUpload }) {
             selectedFile={selectedFile}
             onSelect={setSelectedFile}
             onRemove={onRemove}
-            onExtracted={handleExtracted}
+            onExtractText={handleExtractText}
           />
         </div>
       </motion.div>
@@ -112,6 +196,9 @@ export function FileUploadLayout({ files, onRemove, onFileUpload }) {
           <div className="w-96 bg-white border border-gray-200 rounded-lg shadow-sm">
             <TextExtractionPanel
               extractedText={extractedText[selectedFile.name]}
+              isExtracting={isExtracting[selectedFile.name]}
+              error={extractionErrors[selectedFile.name]}
+              onRetry={() => handleExtractText(selectedFile)}
             />
           </div>
         )}

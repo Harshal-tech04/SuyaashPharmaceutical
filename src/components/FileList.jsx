@@ -1,14 +1,13 @@
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import { File, X, Image as ImageIcon } from "lucide-react";
-import { TextExtractor } from "./TextExtractor";
 
 export function FileList({
   files,
   selectedFile,
   onSelect,
   onRemove,
-  onExtracted,
+  onExtractText,
 }) {
   return (
     <div className="p-4 space-y-4">
@@ -24,7 +23,12 @@ export function FileList({
               className={`bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md ${
                 selectedFile?.name === file.name ? "ring-2 ring-blue-500" : ""
               }`}
-              onClick={() => onSelect(file)}
+              onClick={() => {
+                onSelect(file);
+                if (file.type === "image") {
+                  onExtractText(file);
+                }
+              }}
             >
               <div className="p-4">
                 <div className="flex items-center gap-4">
@@ -54,12 +58,6 @@ export function FileList({
                       <span className="text-xs text-gray-500 capitalize">
                         {file.type}
                       </span>
-                      {file.type === "image" && (
-                        <TextExtractor
-                          file={file.file}
-                          onExtracted={(text) => onExtracted(file.name, text)}
-                        />
-                      )}
                     </div>
                   </div>
                 </div>
