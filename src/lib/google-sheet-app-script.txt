@@ -1,0 +1,430 @@
+/**
+ * Suyaash Pharmaceutical Batch Records - Google Sheets Data Management
+ * --------------------------------------------------------------------
+ * This script handles incoming pharmaceutical batch record data and displays
+ * it in an enterprise-grade formatted sheet with professional styling.
+ * 
+ * Features:
+ * - Row-oriented keys with column-wise data (pharmaceutical industry standard)
+ * - Professionally centered headers and visual formatting
+ * - Automatic data validation with column-based structure
+ * - Intelligent handling of existing data with override functionality
+ */
+
+// Global constants for table positioning and formatting
+const METADATA_START_ROW = 1;       // Row 1
+const MIXING_STEP_START_ROW = 11;   // Row 11 (with gap)
+const PH_ADJUSTMENT_START_ROW = 23; // Row 23 (with gap)
+const TABLE_START_COL = 1;          // Column A
+const DATA_COL = 2;                 // Column B for data
+const DATE_FORMAT = "dd/MM/yyyy";   // Format for date display
+
+// Fields to exclude from each table
+const EXCLUDED_METADATA_FIELDS = ["company", "company_name", "address", "page", "page_number"];
+const EXCLUDED_PROCESS_FIELDS = ["step_number"];
+
+/**
+ * Handles POST requests containing pharmaceutical batch record data
+ * Processes the data and organizes it into three professionally formatted tables
+ */
+function doPost(e) {
+  try {
+    // Enable CORS
+    var response = {
+      status: "success",
+      message: "Data processed successfully"
+    };
+    
+    // Check if form data exists
+    if (!e || !e.parameter) {
+      throw new Error("No form data received");
+    }
+    
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Clear all existing data to prevent duplicates
+    clearExistingData(sheet);
+    
+    // Always initialize the sheet to ensure proper structure
+    initializeSheet(sheet);
+    
+    // Process each section if present
+    if (e.parameter.metadata) {
+      var metadataObj = JSON.parse(e.parameter.metadata);
+      // Filter out excluded fields
+      metadataObj = filterExcludedFields(metadataObj, EXCLUDED_METADATA_FIELDS);
+      processDataSection(sheet, "DOCUMENT METADATA", metadataObj, METADATA_START_ROW);
+    }
+    
+    if (e.parameter.mixingStep) {
+      var mixingStepObj = JSON.parse(e.parameter.mixingStep);
+      // Filter out excluded fields
+      mixingStepObj = filterExcludedFields(mixingStepObj, EXCLUDED_PROCESS_FIELDS);
+      processDataSection(sheet, "PROCESS STEP VI: MIXING INGREDIENTS", mixingStepObj, MIXING_STEP_START_ROW);
+    }
+    
+    if (e.parameter.phAdjustment) {
+      var phAdjustmentObj = JSON.parse(e.parameter.phAdjustment);
+      // Filter out excluded fields
+      phAdjustmentObj = filterExcludedFields(phAdjustmentObj, EXCLUDED_PROCESS_FIELDS);
+      processDataSection(sheet, "PROCESS STEP VII: pH ADJUSTMENT", phAdjustmentObj, PH_ADJUSTMENT_START_ROW);
+    }
+    
+    // Apply professional formatting to the entire sheet
+    applyProfessionalFormatting(sheet);
+    
+    return ContentService.createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    var errorResponse = {
+      status: "error",
+      message: error.toString()
+    };
+    
+    return ContentService.createTextOutput(JSON.stringify(errorResponse))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Clears all existing data from data cells to prevent duplicates
+ */
+function clearExistingData(sheet) {
+  try {
+    // Clear each table's data area (keep headers)
+    clearTableData(sheet, METADATA_START_ROW);
+    clearTableData(sheet, MIXING_STEP_START_ROW);
+    clearTableData(sheet, PH_ADJUSTMENT_START_ROW);
+  } catch (e) {
+    // Silently fail
+  }
+}
+
+/**
+ * Clears data cells from a specific table
+ */
+function clearTableData(sheet, startRow) {
+  var dataStartRow = startRow + 2; // Skip header and title rows
+  var rowCount = getExistingRowsCount(sheet, startRow);
+  
+  if (rowCount > 0) {
+    // Clear both field names and values
+    sheet.getRange(dataStartRow, TABLE_START_COL, rowCount, 2).clear();
+  }
+}
+
+/**
+ * Filters out excluded fields from a data object
+ */
+function filterExcludedFields(data, excludedFields) {
+  var filteredData = {};
+  for (var key in data) {
+    if (data.hasOwnProperty(key) && !excludedFields.includes(key)) {
+      filteredData[key] = data[key];
+    }
+  }
+  return filteredData;
+}
+
+/**
+ * Initialize the sheet with proper structure
+ */
+function initializeSheet(sheet) {
+  try {
+    // Add a title in the first cell if it doesn't exist
+    if (sheet.getRange(1, 1).getValue() === "") {
+      var titleRange = sheet.getRange(1, 1, 1, 2); // Only span 2 columns
+      titleRange.merge();
+      titleRange.setValue("SUYAASH PHARMACEUTICAL - BATCH RECORDS");
+      titleRange.setFontSize(16)
+              .setFontWeight("bold")
+              .setBackground("#4285F4")
+              .setFontColor("#FFFFFF")
+              .setHorizontalAlignment("center");
+      sheet.setRowHeight(1, 30);
+    }
+    
+    // Ensure all three tables exist
+    ensureTableExists(sheet, "DOCUMENT METADATA", METADATA_START_ROW);
+    ensureTableExists(sheet, "PROCESS STEP VI: MIXING INGREDIENTS", MIXING_STEP_START_ROW);
+    ensureTableExists(sheet, "PROCESS STEP VII: pH ADJUSTMENT", PH_ADJUSTMENT_START_ROW);
+    
+    // Set column widths - make description column wider
+    sheet.setColumnWidth(TABLE_START_COL, 180);  // Field names column
+    sheet.setColumnWidth(DATA_COL, 450);         // Data column - wider for descriptions
+    
+    // Add exactly 2-row gaps between tables
+    
+    // Gap between metadata and mixing step (2 rows)
+    var metadataGapRow1 = MIXING_STEP_START_ROW - 2;
+    var metadataGapRow2 = MIXING_STEP_START_ROW - 1;
+    sheet.getRange(metadataGapRow1, 1, 2, 2).clear(); // Clear any content in gap
+    sheet.setRowHeight(metadataGapRow1, 20);
+    sheet.setRowHeight(metadataGapRow2, 20);
+    
+    // Gap between mixing step and pH adjustment (2 rows)
+    var mixingGapRow1 = PH_ADJUSTMENT_START_ROW - 2;
+    var mixingGapRow2 = PH_ADJUSTMENT_START_ROW - 1;
+    sheet.getRange(mixingGapRow1, 1, 2, 2).clear(); // Clear any content in gap
+    sheet.setRowHeight(mixingGapRow1, 20);
+    sheet.setRowHeight(mixingGapRow2, 20);
+    
+    // Set consistent row heights for headers
+    sheet.setRowHeight(METADATA_START_ROW, 25);      // Title row height
+    sheet.setRowHeight(METADATA_START_ROW + 1, 22);  // Header row height
+    
+    sheet.setRowHeight(MIXING_STEP_START_ROW, 25);
+    sheet.setRowHeight(MIXING_STEP_START_ROW + 1, 22);
+    
+    sheet.setRowHeight(PH_ADJUSTMENT_START_ROW, 25);
+    sheet.setRowHeight(PH_ADJUSTMENT_START_ROW + 1, 22);
+  } catch (e) {
+    // Silently fail initialization errors
+  }
+}
+
+/**
+ * Ensures a table exists at the specified row
+ */
+function ensureTableExists(sheet, tableTitle, startRow) {
+  try {
+    var titleCell = sheet.getRange(startRow, TABLE_START_COL);
+    
+    // If title doesn't exist, create the table
+    if (titleCell.getValue() !== tableTitle) {
+      // Create title row with professional formatting
+      titleCell.setValue(tableTitle);
+      
+      // Apply different styling for Document Metadata table
+      if (tableTitle === "DOCUMENT METADATA") {
+        titleCell.setFontWeight("bold")
+                .setHorizontalAlignment("center")
+                .setFontSize(14)
+                .setBackground("#000000")  // Black background
+                .setFontColor("#FFFFFF");  // White text
+      } else {
+        titleCell.setFontWeight("bold")
+                .setHorizontalAlignment("center")
+                .setFontSize(14)
+                .setBackground("#D0E0E3");  // Light blue for other tables
+      }
+      
+      // Merge cells for the title - only across 2 columns (not 3)
+      sheet.getRange(startRow, TABLE_START_COL, 1, 2).merge();
+      
+      // Add column headers
+      var headerRow = startRow + 1;
+      sheet.getRange(headerRow, TABLE_START_COL).setValue("FIELD NAME")
+           .setFontWeight("bold")
+           .setBackground("#E6E6E6")
+           .setHorizontalAlignment("center");
+           
+      sheet.getRange(headerRow, DATA_COL).setValue("VALUE")
+           .setFontWeight("bold")
+           .setBackground("#E6E6E6")
+           .setHorizontalAlignment("center");
+           
+      // Apply borders to the header
+      sheet.getRange(headerRow, TABLE_START_COL, 1, 2)
+           .setBorder(true, true, true, true, true, true, "#9FC5E8", SpreadsheetApp.BorderStyle.SOLID);
+    }
+  } catch (e) {
+    // Silently fail
+  }
+}
+
+/**
+ * Processes a data section and places it in the sheet
+ */
+function processDataSection(sheet, sectionTitle, data, startRow) {
+  // First ensure the table exists
+  ensureTableExists(sheet, sectionTitle, startRow);
+  
+  // Then update the data
+  updateTableData(sheet, sectionTitle, data, startRow);
+}
+
+/**
+ * Updates table data, ensuring no duplicates
+ */
+function updateTableData(sheet, sectionTitle, data, startRow) {
+  try {
+    // Get the keys from the data object
+    var keys = Object.keys(data);
+    if (keys.length === 0) return;
+    
+    // Start after the header row
+    var dataStartRow = startRow + 2;
+    
+    // Process each key in the data and add to sheet
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var value = data[key];
+      var keyFormatted = formatKeyName(key);
+      var rowIndex = dataStartRow + i;
+      
+      // Add the key to first column
+      var keyCell = sheet.getRange(rowIndex, TABLE_START_COL);
+      keyCell.setValue(keyFormatted);
+      keyCell.setFontWeight("bold")
+             .setBackground("#F3F3F3")
+             .setHorizontalAlignment("center");
+      
+      // Add the value to second column
+      updateCellValue(sheet, rowIndex, DATA_COL, value);
+    }
+    
+    // Add borders to all cells in the table
+    var rowCount = keys.length;
+    if (rowCount > 0) {
+      sheet.getRange(dataStartRow, TABLE_START_COL, rowCount, 2)
+           .setBorder(true, true, true, true, true, true, "#9FC5E8", SpreadsheetApp.BorderStyle.SOLID);
+    }
+  } catch (e) {
+    // If error occurs, create simple log in the sheet
+    sheet.getRange(startRow + 5, TABLE_START_COL).setValue("Error: " + e.toString());
+  }
+}
+
+/**
+ * Updates a cell value with proper formatting based on value type
+ */
+function updateCellValue(sheet, row, col, value) {
+  var cell = sheet.getRange(row, col);
+  
+  // Convert empty string values to a dash for better display
+  if (value === "" || value === undefined || value === null) {
+    value = "—"; // Em dash for empty values
+  }
+  
+  // Set the value
+  cell.setValue(value);
+  
+  // For description fields (which tend to be long), use left alignment
+  if (col === DATA_COL && typeof value === 'string' && value.length > 50) {
+    cell.setHorizontalAlignment("left");
+    cell.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    
+    // Set a better row height for long text
+    sheet.setRowHeight(row, 60);
+  } else {
+    // Otherwise center align all data
+    cell.setHorizontalAlignment("center");
+  }
+  
+  // Apply formatting based on value type
+  if (typeof value === 'number') {
+    // For numbers, use number format
+    cell.setNumberFormat("#,##0.00");
+  } else if (value instanceof Date) {
+    // For dates, use date format
+    cell.setNumberFormat(DATE_FORMAT);
+  } else if (typeof value === 'boolean') {
+    // For booleans, use checkbox
+    cell.setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireCheckbox()
+      .build());
+    cell.setValue(value);
+  }
+  
+  // Add a light background
+  cell.setBackground("#FFFFFF");
+}
+
+/**
+ * Gets the number of existing data rows in a table
+ */
+function getExistingRowsCount(sheet, startRow) {
+  var dataStartRow = startRow + 2; // Start after headers
+  var count = 0;
+  
+  try {
+    // Count rows until we find an empty one
+    while (dataStartRow + count <= sheet.getLastRow()) {
+      var cellValue = sheet.getRange(dataStartRow + count, TABLE_START_COL).getValue();
+      if (cellValue === "") break;
+      count++;
+      
+      // Safety limit
+      if (count > 100) break;
+    }
+  } catch (e) {
+    // Return current count if error
+  }
+  
+  return count;
+}
+
+/**
+ * Formats a key name to be more readable
+ * Converts camelCase or snake_case to Title Case With Spaces
+ */
+function formatKeyName(key) {
+  if (!key) return "";
+  
+  // Replace underscores with spaces
+  let formatted = key.replace(/_/g, ' ');
+  
+  // Insert space before capital letters in camelCase
+  formatted = formatted.replace(/([a-z])([A-Z])/g, '$1 $2');
+  
+  // Capitalize first letter of each word
+  formatted = formatted.replace(/\b\w/g, l => l.toUpperCase());
+  
+  return formatted;
+}
+
+/**
+ * Applies professional formatting to the entire sheet
+ */
+function applyProfessionalFormatting(sheet) {
+  try {
+    // Apply alternating row colors to all tables
+    applyAlternatingColors(sheet, METADATA_START_ROW);
+    applyAlternatingColors(sheet, MIXING_STEP_START_ROW);
+    applyAlternatingColors(sheet, PH_ADJUSTMENT_START_ROW);
+    
+    // Add subtle gridlines
+    sheet.setHiddenGridlines(false);
+  } catch (e) {
+    // Ignore formatting errors
+  }
+}
+
+/**
+ * Applies alternating row colors to a table
+ */
+function applyAlternatingColors(sheet, startRow) {
+  try {
+    var dataStartRow = startRow + 2; // Start after headers
+    var rowCount = getExistingRowsCount(sheet, startRow);
+    
+    // Apply colors to data rows
+    for (var i = 0; i < rowCount; i++) {
+      var rowIndex = dataStartRow + i;
+      var rowRange = sheet.getRange(rowIndex, TABLE_START_COL, 1, 2);
+      
+      if (i % 2 === 0) {
+        // Even rows - white
+        rowRange.setBackground("#FFFFFF");
+      } else {
+        // Odd rows - light gray
+        rowRange.setBackground("#F8F9FA");
+      }
+    }
+  } catch (e) {
+    // Ignore coloring errors
+  }
+}
+
+/**
+ * Returns a test response for debugging
+ */
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success", 
+    message: "Google Apps Script is running. Use POST to add data."
+  }))
+  .setMimeType(ContentService.MimeType.JSON);
+} 

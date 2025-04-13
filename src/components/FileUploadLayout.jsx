@@ -1,207 +1,231 @@
 import { useState } from "react";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Image as ImageIcon, FileText } from "lucide-react";
+import { Upload, Image as ImageIcon, Loader2 } from "lucide-react";
 import { FileList } from "./FileList";
 import { FilePreview } from "./FilePreview";
-import { TextExtractionPanel } from "./TextExtractionPanel";
+import { JsonDataTable } from "./JsonDataTable";
+import { toast } from "react-toastify";
 
 export function FileUploadLayout({ files, onRemove, onFileUpload }) {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [extractedText, setExtractedText] = useState({});
-  const [isExtracting, setIsExtracting] = useState({});
-  const [extractionErrors, setExtractionErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [processedFiles, setProcessedFiles] = useState(new Set());
+  const [extractedData, setExtractedData] = useState(null);
 
-  const handleExtracted = (fileName, text) => {
-    setExtractedText((prev) => ({
-      ...prev,
-      [fileName]: text,
-    }));
-    setIsExtracting((prev) => ({
-      ...prev,
-      [fileName]: false,
-    }));
+  const handleExtractedData = (data) => {
+    setIsLoading(false);
+    setExtractedData(data);
+    toast.success(`Data extracted successfully`);
+
+    if (selectedFile) {
+      setProcessedFiles((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(selectedFile.name);
+        return newSet;
+      });
+    }
   };
 
-  const handleExtractionError = (fileName, error) => {
-    setExtractionErrors((prev) => ({
-      ...prev,
-      [fileName]: error,
-    }));
-    setIsExtracting((prev) => ({
-      ...prev,
-      [fileName]: false,
-    }));
-  };
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
 
-  const handleExtractText = (file) => {
-    if (file.type !== "image" || !file.file) return;
-    
-    // If we already have extracted text, don't extract again
-    if (extractedText[file.name]) return;
-    
-    setIsExtracting((prev) => ({
-      ...prev,
-      [file.name]: true,
-    }));
-    
-    // Extract text directly instead of using the component as a constructor
-    const reader = new FileReader();
-    
-    reader.onload = async (e) => {
-      try {
-        const base64Image = e.target.result.split(",")[1];
-        const response = await fetch(
-          `https://vision.googleapis.com/v1/images:annotate?key=${
-            import.meta.env.VITE_GOOGLE_CLOUD_API_KEY
-          }`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              requests: [
-                {
-                  image: {
-                    content: base64Image,
-                  },
-                  features: [
-                    {
-                      type: "TEXT_DETECTION",
-                      maxResults: 1,
-                    },
-                  ],
-                },
-              ],
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error?.message ||
-              `HTTP error! status: ${response.status}`
-          );
-        }
-
-        const data = await response.json();
-        const text = data.responses[0]?.fullTextAnnotation?.text || "No text found";
-        handleExtracted(file.name, text);
-      } catch (err) {
-        handleExtractionError(file.name, err.message);
+    if (file?.type === "image") {
+      if (!processedFiles.has(file.name)) {
+        setIsLoading(true);
+        toast.info(`Processing - extracting text and analyzing content`, {
+          icon: "🔍",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        });
       }
-    };
+    }
+  };
 
-    reader.onerror = () => {
-      handleExtractionError(file.name, "Error reading file");
-    };
+  const handleFileUpload = (newFiles) => {
+    onFileUpload(newFiles);
+    toast.success(`File added successfully`);
+  };
 
-    reader.readAsDataURL(file.file);
+  const handleFileRemove = (fileName) => {
+    setProcessedFiles((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(fileName);
+      return newSet;
+    });
+    onRemove(fileName);
+    toast.info(`File removed`);
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] bg-gray-50">
-      {/* Left Panel - File List */}
+    <div className="flex h-[calc(100vh-5rem)] bg-gray-50">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="w-80 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col"
+        className="w-1/5 min-w-[280px] h-full flex flex-col border-r border-gray-200 bg-white"
       >
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold text-gray-800">Files</h2>
+        <div className="h-1/2 flex flex-col border-b border-gray-200">
+          <div className="p-3 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-gray-800">Files</h2>
+              </div>
+              <div className="flex gap-2">
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex items-center gap-2 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
+                >
+                  <Upload className="w-3 h-3" />
+                  Add
+                </label>
+              </div>
+              <input
+                type="file"
+                className="hidden"
+                id="file-upload"
+                multiple
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={(e) => {
+                  const selectedFiles = Array.from(e.target.files);
+                  const newFiles = selectedFiles.map((file) => ({
+                    name: file.name,
+                    type: file.type.startsWith("image/")
+                      ? "image"
+                      : file.type.split("/")[1] || "document",
+                    url: file.type.startsWith("image/")
+                      ? URL.createObjectURL(file)
+                      : null,
+                    file,
+                  }));
+                  handleFileUpload(newFiles);
+                }}
+              />
             </div>
-            <label
-              htmlFor="file-upload"
-              className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              <Upload className="w-4 h-4" />
-              Add
-            </label>
-            <input
-              type="file"
-              className="hidden"
-              id="file-upload"
-              multiple
-              accept="image/*,.pdf,.doc,.docx"
-              onChange={(e) => {
-                const selectedFiles = Array.from(e.target.files);
-                const newFiles = selectedFiles.map((file) => ({
-                  name: file.name,
-                  type: file.type.startsWith("image/")
-                    ? "image"
-                    : file.type.split("/")[1] || "document",
-                  url: file.type.startsWith("image/")
-                    ? URL.createObjectURL(file)
-                    : null,
-                  file,
-                }));
-                onFileUpload(newFiles);
-              }}
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            <FileList
+              files={files}
+              selectedFile={selectedFile}
+              onSelect={handleFileSelect}
+              onRemove={handleFileRemove}
+              onExtractedData={handleExtractedData}
+              processedFiles={processedFiles}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <FileList
-            files={files}
-            selectedFile={selectedFile}
-            onSelect={setSelectedFile}
-            onRemove={onRemove}
-            onExtractText={handleExtractText}
-          />
+        <div className="h-1/2 flex flex-col">
+          <div className="p-3 border-b border-gray-200">
+            <h2 className="text-lg font-bold text-gray-800">Preview</h2>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+              {selectedFile ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="h-full"
+                >
+                  <FilePreview file={selectedFile} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="h-full flex items-center justify-center"
+                >
+                  <div className="text-center p-4">
+                    <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">
+                      Select a file to preview
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </motion.div>
 
-      {/* Main Content Area - Preview and Text Extraction Side by Side */}
-      <div className="flex-1 flex gap-4 ml-4">
-        {/* Preview Area */}
-        <div className="flex-1">
-          <AnimatePresence>
-            {selectedFile ? (
+      <div className="flex-1 h-full p-4">
+        <AnimatePresence mode="wait">
+          {selectedFile?.type === "image" ? (
+            isLoading ? (
               <motion.div
+                key="loading"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="h-full bg-white border border-gray-200 rounded-lg shadow-sm"
-              >
-                <FilePreview file={selectedFile} />
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="h-full flex items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm"
+                className="h-full flex items-center justify-center"
               >
                 <div className="text-center">
-                  <ImageIcon className="w-24 h-24 text-gray-400 mx-auto mb-6" />
-                  <p className="text-gray-500 text-xl mb-2">
-                    Select a file to preview
+                  <Loader2 className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin" />
+                  <p className="text-gray-600 text-lg font-medium">
+                    Processing document...
                   </p>
-                  <p className="text-gray-400 text-lg">
-                    Choose from the list on the left
+                  <p className="text-gray-400">
+                    Extracting and structuring data with Claude AI
                   </p>
                 </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Text Extraction Panel */}
-        {selectedFile?.type === "image" && (
-          <div className="w-96 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <TextExtractionPanel
-              extractedText={extractedText[selectedFile.name]}
-              isExtracting={isExtracting[selectedFile.name]}
-              error={extractionErrors[selectedFile.name]}
-              onRetry={() => handleExtractText(selectedFile)}
-            />
-          </div>
-        )}
+            ) : (
+              <motion.div
+                key="data"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full w-full"
+              >
+                <JsonDataTable
+                  data={extractedData}
+                  containerHeight="calc(100vh - 6rem)"
+                />
+              </motion.div>
+            )
+          ) : (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full flex items-center justify-center"
+            >
+              <div className="text-center bg-white p-12 rounded-lg shadow-sm border border-gray-200">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="72"
+                  height="72"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mx-auto mb-4 text-gray-300"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                  <path d="M16 13H8" />
+                  <path d="M16 17H8" />
+                  <path d="M10 9H8" />
+                </svg>
+                <p className="text-gray-500 text-xl mb-2">
+                  Select an image to extract data
+                </p>
+                <p className="text-gray-400 text-base">
+                  Pharmaceutical document data will appear here
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

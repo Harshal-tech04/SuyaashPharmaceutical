@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileImage } from "lucide-react";
 import { useState, useCallback } from "react";
 import { FileUploadLayout } from "./components/FileUploadLayout";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function FileUploadForm({ onFileUpload }) {
   const handleFileChange = useCallback(
@@ -62,9 +64,7 @@ function FileUploadForm({ onFileUpload }) {
             animate={{ x: 0 }}
           >
             <Upload className="w-6 h-6 text-blue-600" />
-            <h2 className="text-2xl font-semibold text-gray-800">
-              Add Files
-            </h2>
+            <h2 className="text-2xl font-semibold text-gray-800">Add Files</h2>
           </motion.div>
 
           <div
@@ -104,9 +104,9 @@ function FileUploadForm({ onFileUpload }) {
 
 export default function App() {
   const [files, setFiles] = useState([]);
-
   const handleFileUpload = (newFiles) => {
     setFiles((prevFiles) => [...prevFiles, ...newFiles]);
+    toast.success(`File added successfully`);
   };
 
   const handleFileRemove = (fileName) => {
@@ -115,40 +115,38 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <motion.h1
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-2xl font-bold text-blue-800"
-            >
-              Suyaash Pharmaceutical
-            </motion.h1>
-          </div>
-        </nav>
-
-        <main className="max-w-7xl mx-auto py-6">
-          <div className="flex flex-col">
-            <AnimatePresence>
-              {files.length === 0 ? (
-                <FileUploadForm onFileUpload={handleFileUpload} />
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="mt-8"
-                >
-                  <FileUploadLayout
-                    files={files}
-                    onRemove={handleFileRemove}
-                    onFileUpload={handleFileUpload}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+      <div className="min-h-screen p-10 bg-gray-50 flex flex-col">
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
+        <main className="flex-1">
+          <AnimatePresence>
+            {files.length === 0 ? (
+              <FileUploadForm onFileUpload={handleFileUpload} />
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className=""
+              >
+                <FileUploadLayout
+                  files={files}
+                  onRemove={handleFileRemove}
+                  onFileUpload={handleFileUpload}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       </div>
     </Router>

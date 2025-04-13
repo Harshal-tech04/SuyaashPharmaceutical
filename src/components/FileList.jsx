@@ -1,14 +1,44 @@
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
-import { File, X, Image as ImageIcon } from "lucide-react";
+import { File, X, Image as ImageIcon, Check } from "lucide-react";
+import { TextExtractor } from "./TextExtractor";
+import { useState } from "react";
+import { toast } from "react-toastify";
 
 export function FileList({
   files,
   selectedFile,
   onSelect,
   onRemove,
-  onExtractText,
+  onExtractedData,
+  processedFiles = new Set(),
 }) {
+  const [processingFile, setProcessingFile] = useState(null);
+
+  const handleFileSelect = (file) => {
+    onSelect(file);
+
+    // Only set for processing if image and not already processed
+    if (file.type === "image" && !processedFiles.has(file.name)) {
+      setProcessingFile(file);
+    }
+  };
+
+  const handleDataExtracted = (structuredData, rawText) => {
+    setProcessingFile(null);
+
+    if (structuredData && onExtractedData) {
+      onExtractedData(structuredData, rawText);
+    } else {
+      if (!structuredData) {
+        toast.error("Failed to extract structured data from image");
+      }
+      console.warn(
+        "Not calling onExtractedData - data missing or callback undefined"
+      );
+    }
+  };
+
   return (
     <div className="p-4 space-y-4">
       <AnimatePresence>
@@ -23,12 +53,7 @@ export function FileList({
               className={`bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md ${
                 selectedFile?.name === file.name ? "ring-2 ring-blue-500" : ""
               }`}
-              onClick={() => {
-                onSelect(file);
-                if (file.type === "image") {
-                  onExtractText(file);
-                }
-              }}
+              onClick={() => handleFileSelect(file)}
             >
               <div className="p-4">
                 <div className="flex items-center gap-4">
@@ -58,6 +83,18 @@ export function FileList({
                       <span className="text-xs text-gray-500 capitalize">
                         {file.type}
                       </span>
+                      {processingFile?.name === file.name && (
+                        <span className="text-xs text-blue-500">
+                          Processing...
+                        </span>
+                      )}
+                      {processedFiles.has(file.name) &&
+                        file.type === "image" && (
+                          <span className="text-xs text-green-500 flex items-center">
+                            <Check className="w-3 h-3 mr-1" />
+                            Processed
+                          </span>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -76,6 +113,17 @@ export function FileList({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden TextExtractor for auto-processing */}
+      {processingFile && (
+        <div className="hidden">
+          <TextExtractor
+            file={processingFile.file}
+            onExtracted={handleDataExtracted}
+            autoExtract={true}
+          />
+        </div>
+      )}
     </div>
   );
 }
